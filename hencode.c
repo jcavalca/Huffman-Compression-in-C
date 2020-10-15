@@ -11,6 +11,8 @@
 # define SIZE 256
 # define CODE_SIZE 256
 
+# define CHUNCK 500
+
 /*Builds initial histogram*/
 Node **build_histogram(int fd, int *emptyFlag){
 	Node **histogram = malloc(SIZE*sizeof(Node *));
@@ -230,6 +232,49 @@ char **getEncoding(Node *node, char **codeArr, char *code){
 }
 
 
+/*This will read the entire file one more time, 
+ * translating everything into 0s and 1s according
+ * to the Huffman Tree into a char array.*/
+char *getCode(int fd, char **codeArr){
+	
+	char *encoded = malloc( CHUNCK * sizeof(char));
+	int cap = CHUNCK;
+	int binCount = 0;
+	int *currentChar = malloc(sizeof(int));
+	int ret = 1;
+	/*Setting fd to begg of file*/
+	
+	lseek(fd, 0, SEEK_SET);
+
+	/*Reading file and encoding it*/
+
+	ret = read(fd, currentChar, 1);
+	
+	while (ret != 0){
+		 int iter = 0;
+		
+		 /*Grow char array when needed*/
+		if ( binCount + 100 > cap){
+			cap = 2*cap;
+			encoded = realloc(encoded, cap);
+		}
+	
+		/*Reading the code for each character in the file*/
+		while (codeArr[*currentChar][iter] != '\0'){
+			encoded[binCount] = codeArr[*currentChar][iter];
+			binCount++;
+			iter++;
+		}
+		ret = read(fd, currentChar, 1);
+	}
+	
+
+	/*NULL terminating the code array*/
+	encoded[binCount] = '\0';
+	return encoded;
+}
+
+
 
 int main(int argc, char *argv[]){
 
@@ -240,7 +285,8 @@ int main(int argc, char *argv[]){
 	Node *bst;
 	char **codeArr;
 	int count;
-	
+	char *encodedFile;
+
 	/* Checking for empty file*/
 	if (*emptyFlag == 1){
 		return 0;
@@ -257,7 +303,11 @@ int main(int argc, char *argv[]){
 	}	
 
 	codeArr	= getEncoding(bst, codeArr, ""); 
+
+	/* Let the encoding begin*/
+	encodedFile = getCode(fd, codeArr);
 	
+				
 	 for (count = 0; count < SIZE; count++){
  		if (codeArr[count] != NULL){
 			printf("0x%02x: %s\n", count, codeArr[count]);

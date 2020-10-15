@@ -17,8 +17,18 @@ typedef struct LLNode
         struct LLNode *next;
 } LLNode;
 
+
+/* Huffman Tree Implementation*/
 Node **build_histogram(int file_descriptor, int *emptyFlag);
 int compareNode(const void *p1, const void *p2);
 LLNode *createLL(Node **histogram);
 LLNode *delete2add1(LLNode *linkedList);
 Node *createBST(LLNode *linkedList);
+char *mystrcat(char *word1, char *word2);
+char **getEncoding(Node *node, char **codeArr, char *code);
+
+
+
+/* Encoding Output File Implementation */
+
+char *getCode(int fd, char **codeArr);
