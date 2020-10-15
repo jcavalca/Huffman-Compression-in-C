@@ -16,7 +16,7 @@ Node **build_histogram(int fd, int *emptyFlag){
 	Node **histogram = malloc(SIZE*sizeof(Node *));
 	int currentChar;
 	int count;
-	char *buf = malloc(sizeof(char));
+	char *in = malloc(sizeof(char));
 
 	/* Initializing histogram*/
 	for (count = 0; count < SIZE; count ++){
@@ -29,7 +29,7 @@ Node **build_histogram(int fd, int *emptyFlag){
 	}
 	
 	/* Reading and filling up histogram*/
-	currentChar = read(fd, buf, 1);
+	currentChar = read(fd, in, 1);
 	
 	/* Empty file*/
 	if (currentChar == 0){
@@ -37,8 +37,8 @@ Node **build_histogram(int fd, int *emptyFlag){
 	else{*emptyFlag = 0;}
 
 	while (currentChar != 0){
-		(histogram[(int) buf[0] ] -> freq)++;
-		 currentChar = read(fd, buf, 1);	
+		(histogram[(int) in[0]] -> freq)++;
+		currentChar = read(fd, in, 1);
 	}		
 
 	return histogram;
