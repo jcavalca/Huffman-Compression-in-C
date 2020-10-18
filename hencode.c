@@ -4,17 +4,20 @@
 # include <sys/types.h>
 # include <sys/stat.h>
 # include <fcntl.h>
-#include <unistd.h>
+# include <unistd.h>
+# include <errno.h>
+# include <stdint.h>
+# include <arpa/inet.h>
 
 # include "htable.h"
 
 # define SIZE 256
 # define CODE_SIZE 256
-
 # define CHUNCK 500
+# define SAFE_MARGIN 100
 
 /*Builds initial histogram*/
-Node **build_histogram(int fd, int *emptyFlag){
+Node **build_histogram(int fd, int *emptyFlag, uint32_t *freqArr){
 	Node **histogram = malloc(SIZE*sizeof(Node *));
 	int currentChar;
 	int count;
@@ -42,7 +45,13 @@ Node **build_histogram(int fd, int *emptyFlag){
 		(histogram[(int) in[0]] -> freq)++;
 		currentChar = read(fd, in, 1);
 	}		
-
+	
+	for (count = 0; count < SIZE; count++){
+		if(histogram[count] -> freq != 0){
+			uint32_t temp = (uint32_t) histogram[count] -> freq;
+			freqArr[count] = temp;
+		}
+	}
 	return histogram;
 }
 
@@ -104,7 +113,8 @@ LLNode *createLL(Node **histogram){
 			break;
 		}
 		else{
-LLNode *node_ll = malloc(sizeof(LLNode *) + sizeof(Node *));		
+		LLNode *node_ll = malloc(sizeof(LLNode *) + 
+					sizeof(Node *));		
 		node_ll -> data = histogram[count];
 		nodesArr[count] = node_ll;
 		numbElements++;
@@ -233,59 +243,115 @@ char **getEncoding(Node *node, char **codeArr, char *code){
 
 
 /*This will read the entire file one more time, 
- * translating everything into 0s and 1s according
- * to the Huffman Tree into a char array.*/
-char *getCode(int fd, char **codeArr){
+ * outputting compression as it goes.*/
+
+char *getCode(int fd_in, char **codeArr){
+
 	
 	char *encoded = malloc( CHUNCK * sizeof(char));
 	int cap = CHUNCK;
 	int binCount = 0;
-	int *currentChar = malloc(sizeof(int));
+	char *currentChar = malloc(sizeof(char));
 	int ret = 1;
-	/*Setting fd to begg of file*/
-	
-	lseek(fd, 0, SEEK_SET);
 
 	/*Reading file and encoding it*/
-
-	ret = read(fd, currentChar, 1);
+	lseek(fd_in, 0, SEEK_SET);
+	ret = read(fd_in, currentChar, 1);
 	
 	while (ret != 0){
 		 int iter = 0;
 		
 		 /*Grow char array when needed*/
-		if ( binCount + 100 > cap){
+		if ( binCount + SAFE_MARGIN > cap){
 			cap = 2*cap;
 			encoded = realloc(encoded, cap);
 		}
 	
 		/*Reading the code for each character in the file*/
-		while (codeArr[*currentChar][iter] != '\0'){
-			encoded[binCount] = codeArr[*currentChar][iter];
+		while (codeArr[(int) currentChar[0]][iter] != '\0'){
+			encoded[binCount] = codeArr[(int)currentChar[0]][iter];
 			binCount++;
 			iter++;
 		}
-		ret = read(fd, currentChar, 1);
+		ret = read(fd_in, currentChar, 1);
 	}
 	
 
 	/*NULL terminating the code array*/
 	encoded[binCount] = '\0';
 	return encoded;
+	
 }
 
 
 
+/* This will write the header to the ouput file*/
+void writeHeader(int fd, uint32_t *freqArr){
+	uint8_t num_1;	
+	int count;
+	uint8_t *pp = &num_1;
+	uint8_t *currChar = malloc(sizeof(uint8_t));
+	uint32_t *currFreq =  malloc(sizeof(uint32_t));
+	if (!(pp = malloc(1))){
+		perror("failure for malloc num - 1");
+		exit(1);
+	}
+		
+	
+	for(count = 0; count < SIZE; count++){
+		if (freqArr[count]){
+			num_1++;}
+	}
+
+	/*After all, it's num -1. Let's write it*/
+	num_1--;
+	if (write(fd, pp, 1) != 1){
+		perror("failure when writing num -1");
+		exit(1);
+	}
+
+	/*Writing frequencies and characters*/ 	
+	for(count = 0; count < SIZE; count++){
+                if (freqArr[count]){
+         		*currChar = count;
+			*currFreq = freqArr[count];            
+			
+			write(fd, currChar, 1);
+			/*Convert to big endianess(network)*/
+			*currFreq = htonl(*currFreq);
+			if ( write(fd, currFreq, 4) != 4){
+				perror("writing freq.");
+				exit(1);
+			}
+		 }
+        }
+	free(currChar);
+	free(currFreq);
+}
+
+
 int main(int argc, char *argv[]){
 
-	int fd = open(argv[1], O_RDONLY);
+	int fd_in = open(argv[1], O_RDONLY);
 	int *emptyFlag = malloc(sizeof(int));
-	Node **histogram = build_histogram(fd, emptyFlag);	
+	uint32_t *freqArr = calloc(SIZE,  sizeof(uint32_t));
+	Node **histogram = build_histogram(fd_in, emptyFlag, freqArr);	
 	LLNode *ll;
 	Node *bst;
 	char **codeArr;
 	int count;
-	char *encodedFile;
+	int fd_out;
+	char *encodedIn;
+	if (argc == 3){
+		fd_out = open(argv[2], O_RDWR | O_CREAT | O_TRUNC,
+                 (S_IWUSR | S_IXUSR| S_IRUSR | S_IROTH | S_IXOTH | S_IWOTH) );
+                if (fd_out == -1){
+                        perror("failure when opening output file");
+                        exit(1);
+                }
+        }
+        else{
+                fd_out = STDOUT_FILENO;}
 
 	/* Checking for empty file*/
 	if (*emptyFlag == 1){
@@ -305,16 +371,24 @@ int main(int argc, char *argv[]){
 	codeArr	= getEncoding(bst, codeArr, ""); 
 
 	/* Let the encoding begin*/
-	encodedFile = getCode(fd, codeArr);
-	
-				
+	writeHeader(fd_out, freqArr);
+	encodedIn = getCode(fd_in, codeArr);
+
 	 for (count = 0; count < SIZE; count++){
  		if (codeArr[count] != NULL){
-			printf("0x%02x: %s\n", count, codeArr[count]);
+		printf("\n0x%02x: %s\n", count, codeArr[count]);
 			
 		}      
 
 	 } 
+	
+
+	
+
+
+	/* Deallocating stuff*/	
+	close(fd_in);
+	close(fd_out);
 	
 	free(emptyFlag);
 	for (count = 0; count < SIZE; count++){
