@@ -33,3 +33,4 @@ char **getEncoding(Node *node, char **codeArr, char *code);
 
 char *getCode(int fd, char **codeArr);
 void writeHeader(int fd, uint32_t *freqArr);
+void writeBody(int fd_out, char *encoded);

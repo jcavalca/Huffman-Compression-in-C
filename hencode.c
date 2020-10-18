@@ -289,14 +289,9 @@ char *getCode(int fd_in, char **codeArr){
 void writeHeader(int fd, uint32_t *freqArr){
 	uint8_t num_1;	
 	int count;
-	uint8_t *pp = &num_1;
+	uint8_t buff[1];
 	uint8_t *currChar = malloc(sizeof(uint8_t));
 	uint32_t *currFreq =  malloc(sizeof(uint32_t));
-	if (!(pp = malloc(1))){
-		perror("failure for malloc num - 1");
-		exit(1);
-	}
-		
 	
 	for(count = 0; count < SIZE; count++){
 		if (freqArr[count]){
@@ -305,7 +300,8 @@ void writeHeader(int fd, uint32_t *freqArr){
 
 	/*After all, it's num -1. Let's write it*/
 	num_1--;
-	if (write(fd, pp, 1) != 1){
+	buff[0] = num_1;
+	if (write(fd, buff, 1) != 1){
 		perror("failure when writing num -1");
 		exit(1);
 	}
@@ -328,6 +324,32 @@ void writeHeader(int fd, uint32_t *freqArr){
 	free(currChar);
 	free(currFreq);
 }
+
+/*This will write the body of the output*/
+void writeBody(int fd_out, char *encoded){
+	int count = 0;
+	uint8_t *out_byte = malloc(1);
+	int byte_cap = 8, mask;
+	
+	while (encoded[count] != '\0'){
+		int iterator = 0;
+		mask = 0x80;	
+		*out_byte = 0;
+		while (iterator < byte_cap){
+			if ( encoded[count] == '1')
+				*out_byte = *out_byte + mask;			
+			mask >>=1;
+			iterator++;
+			count++;
+		}
+		write(fd_out, out_byte, 1);
+	}
+	free(out_byte);
+}
+
+
+
+
 
 
 int main(int argc, char *argv[]){
@@ -373,14 +395,17 @@ int main(int argc, char *argv[]){
 	/* Let the encoding begin*/
 	writeHeader(fd_out, freqArr);
 	encodedIn = getCode(fd_in, codeArr);
-
-	 for (count = 0; count < SIZE; count++){
+	writeBody(fd_out, encodedIn);
+	
+	/* DEBUG
+	printf("%s \n", encodedIn);
+	for (count = 0; count < SIZE; count++){
  		if (codeArr[count] != NULL){
 		printf("\n0x%02x: %s\n", count, codeArr[count]);
-			
+				
 		}      
 
-	 } 
+	 } */
 	
 
 	
