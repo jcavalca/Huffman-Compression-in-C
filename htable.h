@@ -19,7 +19,8 @@ typedef struct LLNode
 
 
 /* Huffman Tree Implementation*/
-Node **build_histogram(int file_descriptor, int *emptyFlag, uint32_t *arr);
+Node **build_histogram(int fd, int *emptyFlag, uint32_t *arr, 
+int *oneFlag);
 int compareNode(const void *p1, const void *p2);
 LLNode *createLL(Node **histogram);
 LLNode *delete2add1(LLNode *linkedList);
@@ -29,8 +30,14 @@ char **getEncoding(Node *node, char **codeArr, char *code);
 
 
 
-/* Encoding Output File Implementation */
+/* Hencode Implementation */
 
 char *getCode(int fd, char **codeArr);
 void writeHeader(int fd, uint32_t *freqArr);
 void writeBody(int fd_out, char *encoded);
+
+
+/* Hdecode Implementation */
+Node **headerToHistogram(int fd, long int *total, int *oneChar);
+void writeOutput(int fd_in, int fd_out, Node *bst, long int *pp);
+
