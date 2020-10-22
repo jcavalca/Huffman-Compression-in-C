@@ -401,8 +401,10 @@ void writeBody(int fd_out, char *encoded){
 			iterator++;
 			count++;
 		}
-		write(fd_out, out_byte, 1);
+		if(write(fd_out, out_byte, 1) != 1)
+		exit(1);
 	}
+	
 	free(out_byte);
 }
 /*

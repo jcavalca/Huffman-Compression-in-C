@@ -16,7 +16,7 @@
 
 /* This will read the header from input 
  * encoded file and generate histogram*/
-Node **headerToHistogram(int fd_in, long int *total, int *oneChar){
+Node **headerToHistogram(int fd_in, int *oneChar){
         Node **histogram = malloc(SIZE*sizeof(Node *));
         int count;
 	uint8_t *num_1 = malloc(1), *currentChar = malloc(1);
@@ -44,7 +44,6 @@ Node **headerToHistogram(int fd_in, long int *total, int *oneChar){
 		*oneChar = 1;	
 	}	
 	/*Let the reading begin*/ 
-
 	for (count = 0; count < *num_1 + 1; count++){
 		int charr, freqq;
 		read(fd_in, currentChar, 1);
@@ -54,7 +53,6 @@ Node **headerToHistogram(int fd_in, long int *total, int *oneChar){
 		charr = (int) *currentChar;
 		freqq = (int) *currentFreq;
 		histogram[charr] -> freq = freqq; 	
-		*total = *total + freqq;		
 	}
 	free(num_1); 
 	free(currentChar);
@@ -153,11 +151,18 @@ LLNode *delete2add1(LLNode *linkedList){
 	Node *right = linkedList -> next -> data;
 	LLNode *current, *new;
 	Node *combined;
-
+	LLNode *first = linkedList;
+	LLNode *second = linkedList -> next;
 	linkedList = linkedList -> next -> next;
 	current = linkedList;
 
+	free(first);	
+	free(second);
+		
+
 	combined = malloc(2*sizeof(int) + 2*sizeof(Node *));
+	if(combined == NULL)
+	exit(1);
 	combined -> freq = (left -> freq) + (right -> freq);
 	combined -> Char = -1; /* Combined node flag */
 	combined -> left = left;
@@ -165,7 +170,9 @@ LLNode *delete2add1(LLNode *linkedList){
 
 
 	new = malloc(sizeof(Node *) + sizeof(LLNode *));
-        new -> data = combined;
+        if(combined == NULL)
+        exit(1);
+	new -> data = combined;
         new -> next = NULL;
 
 	/* Combined node is the only one left */
@@ -208,13 +215,18 @@ Node *createBST(LLNode *linkedList){
 	return linkedList -> data;
 }
 
-void writeOutput(int fd_in, int fd_out, Node *bst, long int *sumChar){
+void writeOutput(int fd_in, int fd_out, Node *bst, long int amountChar){
 	
-	uint8_t *current = malloc(1);
-	int mask;
-	Node *node = bst; /*Start at root*/
-	uint8_t *buff = malloc(1);
+	uint8_t *current;
+	uint8_t mask;
 	int charWritten = 0;
+	Node *node = bst; /*Start at root*/
+	uint8_t *buff;
+
+	current = malloc(1);
+	buff = malloc(1);
+	if (current == NULL || buff == NULL)
+	exit(1);
 	while (  read(fd_in, current, 1) != 0){
 		for ( mask = 0x80; mask; mask>>= 1){
 	
@@ -231,8 +243,8 @@ void writeOutput(int fd_in, int fd_out, Node *bst, long int *sumChar){
 				/*Restart at the root*/
 				node = bst;
 			}
-			if (charWritten == *sumChar)
-				exit(0);		
+			if (charWritten == amountChar){
+                		exit(0);}
 			/*Go right*/
 			if (mask & *current){
 				node = node -> right;
@@ -243,8 +255,26 @@ void writeOutput(int fd_in, int fd_out, Node *bst, long int *sumChar){
 			}	
 		}
 	}
+
+	/*Solve files that contain chars 
+ * 	  multiples of 8 bug
+ * 	  Loop was exits charWritten == amountChar*/
+	if (charWritten != amountChar){
+		*buff = (uint8_t) node -> Char;
+        	if (write(fd_out, buff, 1) != 1){
+        	perror("writing to out"); 
+        	exit(1);
+		}
+	}
 	free(buff);
+	free(current);
+
 }
+
+
+
+
+
 
 void writeOneChar(Node **histogram, int fd_out){
 
@@ -276,10 +306,9 @@ int main(int argc, char *argv[]){
 	LLNode *ll;
         Node *bst;
 	int *oneChar = malloc(sizeof(int*));
-	long int *sumChar = malloc(sizeof(long int));
-	if (oneChar == NULL || sumChar == NULL)
+	long int amountChar;
+	if (oneChar == NULL)
 	exit(1);
-	*sumChar = 0;
 	/*Parsing command line args*/
 	if (argc == 1 || (argc > 1 && strcmp(argv[1], "-") == 0)){
 		fd_in = STDIN_FILENO;
@@ -307,7 +336,8 @@ int main(int argc, char *argv[]){
 		lseek(fd_in, 0, SEEK_SET);	
 	}
 	*oneChar = 0;
-	histogram = headerToHistogram(fd_in, sumChar, oneChar);
+	histogram = headerToHistogram(fd_in, oneChar);
+	/*One Char File*/
 	if (*oneChar == 1){
 		writeOneChar(histogram, fd_out);
 		free(histogram);	
@@ -315,7 +345,9 @@ int main(int argc, char *argv[]){
 	}
 	ll = createLL(histogram);
         bst = createBST(ll);
-	writeOutput(fd_in, fd_out, bst, sumChar); 
+	amountChar = bst -> freq;
+	
+	writeOutput(fd_in, fd_out, bst, amountChar); 
 		
 	 /* Deallocating stuff*/
         close(fd_in);
@@ -330,3 +362,4 @@ int main(int argc, char *argv[]){
 
 	return 0;
 }
+	int charWritten = 0;

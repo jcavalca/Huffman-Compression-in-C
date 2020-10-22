@@ -38,6 +38,6 @@ void writeBody(int fd_out, char *encoded);
 
 
 /* Hdecode Implementation */
-Node **headerToHistogram(int fd, long int *total, int *oneChar);
-void writeOutput(int fd_in, int fd_out, Node *bst, long int *pp);
+Node **headerToHistogram(int fd, int *oneChar);
+void writeOutput(int fd_in, int fd_out, Node *bst, long int sum);
 
