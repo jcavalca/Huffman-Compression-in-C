@@ -12,7 +12,14 @@
 # include "htable.h"
 
 # define SIZE 256
-
+# define BIG_STREAM 4096
+# define MARGIN 4
+void alloc_check(void *pp){
+        if (pp == NULL){
+                perror("memory allocation");
+                exit(1);
+        }
+}
 
 /* This will read the header from input 
  * encoded file and generate histogram*/
@@ -21,15 +28,16 @@ Node **headerToHistogram(int fd_in, int *oneChar){
         int count;
 	uint8_t *num_1 = malloc(1), *currentChar = malloc(1);
 	uint32_t *currentFreq = malloc(4);
+
+	alloc_check(histogram);
+	alloc_check(num_1);
+	alloc_check(currentChar);
+	alloc_check(currentFreq);
 	
-	if (num_1 == NULL || currentChar == NULL ||
-		currentFreq == NULL)
-	exit(1);
 	 /* Initializing histogram*/
         for (count = 0; count < SIZE; count ++){
                 Node *huffNode = malloc(2*sizeof(int) + 2*sizeof(Node *));
-               	if (huffNode == NULL)
-		exit(1);
+		alloc_check(huffNode);
 		huffNode -> Char = count;
                 huffNode -> freq = 0;
                 huffNode -> left = NULL;
@@ -120,8 +128,8 @@ LLNode *createLL(Node **histogram){
 		else{
 		LLNode *node_ll = malloc(sizeof(LLNode *) + 
 					sizeof(Node *));		
-		if(node_ll == NULL)
-		exit(1);
+		alloc_check(node_ll);
+
 		node_ll -> data = histogram[count];
 		nodesArr[a] = node_ll;
 		numbElements++;
@@ -161,8 +169,7 @@ LLNode *delete2add1(LLNode *linkedList){
 		
 
 	combined = malloc(2*sizeof(int) + 2*sizeof(Node *));
-	if(combined == NULL)
-	exit(1);
+	alloc_check(combined);
 	combined -> freq = (left -> freq) + (right -> freq);
 	combined -> Char = -1; /* Combined node flag */
 	combined -> left = left;
@@ -170,8 +177,7 @@ LLNode *delete2add1(LLNode *linkedList){
 
 
 	new = malloc(sizeof(Node *) + sizeof(LLNode *));
-        if(combined == NULL)
-        exit(1);
+	alloc_check(new);
 	new -> data = combined;
         new -> next = NULL;
 
@@ -225,8 +231,8 @@ void writeOutput(int fd_in, int fd_out, Node *bst, long int amountChar){
 
 	current = malloc(1);
 	buff = malloc(1);
-	if (current == NULL || buff == NULL)
-	exit(1);
+	alloc_check(current);
+	alloc_check(buff);
 	while (  read(fd_in, current, 1) != 0){
 		for ( mask = 0x80; mask; mask>>= 1){
 	
@@ -271,7 +277,85 @@ void writeOutput(int fd_in, int fd_out, Node *bst, long int amountChar){
 
 }
 
+uint8_t *bufferRealloc(uint8_t *buff, int size, int new_size){
 
+	int count = 0;
+	uint8_t *new = malloc(new_size);
+	for (count = 0; count < size; count++){
+	new[count] = buff[count];}
+	free(buff);
+	return new;
+
+
+}
+void writeOutput2(int fd_in, int fd_out, Node *bst, long int amountChar){
+
+        uint8_t *current;
+        uint8_t mask;
+        int charWritten = 0;
+        Node *node = bst; /*Start at root*/
+        uint8_t *buff;
+	int byteCount, cap;
+	cap = MARGIN*BIG_STREAM;
+        current = malloc(BIG_STREAM);
+        buff = malloc(cap);
+        alloc_check(current);
+        alloc_check(buff);
+	
+        while (  read(fd_in, current, BIG_STREAM) != 0){
+		int count = 0;
+	        byteCount = 0;
+		while (count < BIG_STREAM){
+		       if (byteCount == cap){
+			int old = cap;
+			cap = MARGIN*cap;
+			buff = bufferRealloc(buff,old, cap);
+			}					
+
+	               for ( mask = 0x80; mask; mask>>= 1){
+
+                        /*If at a leaf ...*/
+                        if (node -> right == NULL &&  node -> left == NULL){
+                                charWritten++;
+                                *(buff + byteCount) = (uint8_t) node -> Char;
+				byteCount++;
+                                /*Restart at the root*/
+                                node = bst;
+                        }
+                        if (charWritten == amountChar){
+                                write(fd_out, buff, byteCount);
+				free(buff);
+				free(current);
+				return;	
+			}
+                        /*Go right*/
+                        if (mask & *(current + count)){
+                                node = node -> right;
+
+                        /*Go left*/
+                        }else{
+                                node = node -> left;
+                        }
+                	}
+			count++;
+		}
+		write(fd_out, buff, byteCount);
+        }
+
+        /*Solve files that contain chars 
+ *        multiples of 8 bug
+	printf("hello %d \n", (int)(amountChar -  charWritten));
+        if (charWritten != amountChar){
+                *buff = (uint8_t) node -> Char;
+                if (write(fd_out, buff, 1) != 1){
+                perror("writing to out");
+                exit(1);
+                }
+        }*/
+        free(buff);
+        free(current);
+
+}
 
 
 
@@ -280,9 +364,9 @@ void writeOneChar(Node **histogram, int fd_out){
 
 	uint8_t *oneChar;
 	int freq, count;
-	
-	oneChar = malloc(sizeof(int *));
-	
+	uint8_t *buffer;
+	oneChar = malloc(1);
+ 	alloc_check(oneChar);	
 	for (count = 0; count < SIZE; count++){
 	
 		if (histogram[count] -> freq != 0){
@@ -291,9 +375,13 @@ void writeOneChar(Node **histogram, int fd_out){
 		break;
 		}	
 	}
-
+	buffer = malloc(freq);
 	for (count = 0; count < freq; count++){
-		write(fd_out, oneChar, 1);
+		buffer[count] = *oneChar;
+	}
+	if (write(fd_out, buffer, freq) != freq){
+	perror("write out");
+	exit(1);
 	}
 	free(oneChar);
 }
@@ -307,8 +395,7 @@ int main(int argc, char *argv[]){
         Node *bst;
 	int *oneChar = malloc(sizeof(int*));
 	long int amountChar;
-	if (oneChar == NULL)
-	exit(1);
+	alloc_check(oneChar);
 	/*Parsing command line args*/
 	if (argc == 1 || (argc > 1 && strcmp(argv[1], "-") == 0)){
 		fd_in = STDIN_FILENO;
@@ -332,7 +419,7 @@ int main(int argc, char *argv[]){
 	if (read(fd_in, emptyTest, 1) != 1) {
 		return 0;
 	}else{
-	/*Otherwhise, let's reset out pointer*/
+	/*Otherwhise, let's reset our pointer*/
 		lseek(fd_in, 0, SEEK_SET);	
 	}
 	*oneChar = 0;
@@ -347,7 +434,7 @@ int main(int argc, char *argv[]){
         bst = createBST(ll);
 	amountChar = bst -> freq;
 	
-	writeOutput(fd_in, fd_out, bst, amountChar); 
+	writeOutput2(fd_in, fd_out, bst, amountChar); 
 		
 	 /* Deallocating stuff*/
         close(fd_in);
@@ -362,4 +449,3 @@ int main(int argc, char *argv[]){
 
 	return 0;
 }
-	int charWritten = 0;
