@@ -17,58 +17,64 @@
 # define SAFE_MARGIN 100
 # define BIG_STREAM 4096
 
-/*Builds initial histogram*/
-Node **build_histogram(int fd, int *emptyFlag, uint32_t *freqArr, int *oF){
-	Node **histogram;
-	int currentChar;
-	int count, onec;
-	uint8_t *in = malloc(sizeof(char));
-	histogram = malloc(SIZE*sizeof(Node *));
-	if (histogram == NULL || in == NULL){
-		perror("malloc");
+void alloc_check(void *pp){
+	if (pp == NULL){
+		perror("memory allocation");
 		exit(1);
 	}
+}
 
-	/* Initializing histogram*/
-	for (count = 0; count < SIZE; count ++){
-		Node *huffNode = malloc(2*sizeof(int) + 2*sizeof(Node *));
-		if (huffNode == NULL)
-		exit(1);
-		huffNode -> Char = count;
-		huffNode -> freq = 0;
-		huffNode -> left = NULL;
-		huffNode -> right = NULL;
-		histogram[count] = huffNode;
-	}
-	
-	/* Reading and filling up histogram*/
-	currentChar = read(fd, in, 1);
-	
-	while (currentChar != 0){
-		(histogram[(int) in[0]] -> freq)++;
-		currentChar = read(fd, in, 1);
-		count++;
-	}		
-	onec = 0;
-	for (count = 0; count < SIZE; count++){
-		if(histogram[count] -> freq != 0){
-			uint32_t temp = (uint32_t) histogram[count] -> freq;
-			freqArr[count] = temp;
-			onec++;
+Node **build_histogram(int fd, int *emptyFlag, uint32_t *freqArr, int *oF){
+        Node **histogram;
+        int currentChar;
+        int count, onec;
+        uint8_t *in = malloc(BIG_STREAM);
+        histogram = malloc(SIZE*sizeof(Node *));
+        alloc_check(in);
+        alloc_check(histogram);
+
+        /* Initializing histogram*/
+        for (count = 0; count < SIZE; count ++){
+                Node *huffNode = malloc(2*sizeof(int) + 2*sizeof(Node *));
+                alloc_check(huffNode);
+                huffNode -> Char = count;
+                huffNode -> freq = 0;
+                huffNode -> left = NULL;
+                huffNode -> right = NULL;
+                histogram[count] = huffNode;
+        }
+
+        /* Reading and filling up histogram*/
+        currentChar = read(fd, in, BIG_STREAM);
+        while (currentChar != 0){
+		int byteCount = 0;
+		while (byteCount < currentChar){
+                (histogram[(int) in[byteCount]] -> freq)++;
+                count++;
+		byteCount++;
 		}
-	}
-	
-	/* Empty file*/
+		currentChar = read(fd, in, BIG_STREAM);	
+        }
+        onec = 0;
+        for (count = 0; count < SIZE; count++){
+                if(histogram[count] -> freq != 0){
+                        uint32_t temp = (uint32_t) histogram[count] -> freq;
+                        freqArr[count] = temp;
+                        onec++;
+                }
+        }
+
+        /* Empty file*/
         if (onec == 0){
               *emptyFlag = 1;}
-        else  
-	      *emptyFlag = 0;
+        else
+              *emptyFlag = 0;
 
-	if (onec == 1){
+        if (onec == 1){
                 *oF = 1;}
         else{
                 *oF = 0;}
-	return histogram;
+        return histogram;
 }
 
 /*Compares two nodes, and sorts histogram in order
@@ -127,8 +133,7 @@ LLNode *createLL(Node **histogram){
 		if (histogram[count] -> freq != 0){
 		LLNode *node_ll = malloc(sizeof(LLNode *) + 
 					sizeof(Node *));		
-		if (node_ll == NULL)
-                exit(1);	
+		alloc_check(node_ll);
 		node_ll -> data = histogram[count];
 		nodesArr[a] = node_ll;
 		numbElements++;
@@ -168,8 +173,7 @@ LLNode *delete2add1(LLNode *linkedList){
 	free(sec);
 	
 	combined = malloc(2*sizeof(int) + 2*sizeof(Node *));
-	if (combined == NULL)
-                exit(1);
+	alloc_check(combined);
 	combined -> freq = (left -> freq) + (right -> freq);
 	combined -> Char = -1; /* Combined node flag */
 	combined -> left = left;
@@ -177,8 +181,7 @@ LLNode *delete2add1(LLNode *linkedList){
 
 
 	new = malloc(sizeof(Node *) + sizeof(LLNode *));
- 	if (new == NULL)
-                exit(1);
+	alloc_check(new);
 	new -> data = combined;
         new -> next = NULL;
 
@@ -231,8 +234,8 @@ char *mystrcat(char *word1, char *word2){
 	int count2 = 0;
 	int len1 = strlen(word1);
 	char *new_word = malloc( new_len * sizeof(char));
-	if (new_word == NULL)
-                exit(1);
+	alloc_check(new_word);
+	
 	for (count = 0; count < new_len - 1; count++){
 		if (count < len1){
 			new_word[count] = word1[count];
@@ -271,8 +274,7 @@ char *myrealloc(char *old, int new_cap){
 	int count = 0, count2;
 
 	char *new = malloc(new_cap);
-	if(new==NULL)
-	exit(1);
+	alloc_check(new);
 	
 	while (old[count] != '\0'){
 	new[count] = old[count];
@@ -285,56 +287,63 @@ char *myrealloc(char *old, int new_cap){
 	return new;
 }
 
+
 /*This will read the entire file one more time, 
- * outputting compression as it goes.*/
+ * putting the encoded file as an array
+ * in memory. */
 
 char *getCode(int fd_in, char **codeArr){
 
-	
-	char *encoded;
-	int cap = CHUNCK;
-	int binCount = 0;
-	uint8_t *currentChar;
-	int ret = 1;
+        char *encoded;
+        int cap = CHUNCK;
+        int binCount = 0;
+        uint8_t *currentChar;
+        int ret = 1;
+        encoded = malloc(cap);
+        currentChar = malloc(BIG_STREAM);
 
-	encoded = malloc(cap);
-	currentChar = malloc(1);
-	if (encoded == NULL || currentChar == NULL)
-                exit(1);
+        alloc_check(encoded);
+        alloc_check(currentChar);
 
-	/*Reading file and encoding it*/
-	lseek(fd_in,0, SEEK_SET);
-	ret = read(fd_in, currentChar, 1);
-	
-	while (ret != 0){
-		 int iter = 0;
-		
+        /*Reading file and encoding it*/
+        lseek(fd_in,0, SEEK_SET);
+        ret = read(fd_in, currentChar, BIG_STREAM);
+
+        while (ret != 0){
+                int iter;
+		int count = 0;
+		while (count < ret){
+		*currentChar = *(currentChar + count);
+                iter = 0;
 		 /*Grow char array when needed*/
-		if ( binCount + SAFE_MARGIN > cap){
-			cap = 2*cap;
-			encoded[binCount] = '\0';
-			encoded = myrealloc(encoded, cap);
-			
-		}
-	
-		/*Reading the code for each character in the file*/
-		while (codeArr[(int) currentChar[0]][iter] != '\0'){
-			encoded[binCount] = codeArr[(int)currentChar[0]][iter];
-			binCount++;
-			iter++;
-		}
-	
-		ret = read(fd_in, currentChar, 1);
+                if ( binCount + SAFE_MARGIN > cap){
+                        cap = 2*cap;
+                        encoded[binCount] = '\0';
+                        encoded = myrealloc(encoded, cap);
 
+                }
+
+                /*Reading the code for each character in the file*/
+                while (codeArr[(int) currentChar[0]][iter] != '\0'){
+                        encoded[binCount] = codeArr[(int)currentChar[0]][iter];
+                        binCount++;
+                        iter++;
+                }
 		
-	}
-	
+		count++;
+		}
+                ret = read(fd_in, currentChar, BIG_STREAM);
 
-	/*NULL terminating the code array*/
-	encoded[binCount] = '\0';
-	return encoded;
-	
+
+        }
+
+
+        /*NULL terminating the code array*/
+        encoded[binCount] = '\0';
+        return encoded;
+
 }
+
 
 
 
@@ -346,11 +355,17 @@ void writeHeader(int fd, uint32_t *freqArr){
         uint32_t *currFreq;
 	uint8_t *buff = malloc(1);
 	num_1 = malloc(1);	
-	if(buff == NULL)
-	exit(1);
+
+	alloc_check(buff);
+	alloc_check(num_1);
+
 	*num_1 = 0;
 	currChar = malloc(sizeof(uint8_t));
 	currFreq =  malloc(sizeof(uint32_t));
+
+	alloc_check(currChar);
+	alloc_check(currFreq);
+	
 	if (currChar == NULL || currFreq == NULL)
                 exit(1);
 	for(count = 0; count < SIZE; count++){
@@ -384,56 +399,38 @@ void writeHeader(int fd, uint32_t *freqArr){
 
 /*This will write the body of the output*/
 void writeBody(int fd_out, char *encoded){
-	int count = 0;
-	int byte_cap = 8, mask;
-	uint8_t *out_byte = malloc(1);
-	if (out_byte == NULL)
-	exit(1);
-	
+        int count = 0;
+        int byte_cap = 8, mask;
+        uint8_t *out_byte = malloc(BIG_STREAM);
+	int byteCount = 0;
+	int iterator;
+        alloc_check(out_byte);
+
 	while (encoded[count] != '\0'){
-		int iterator = 0;
-		mask = 0x80;	
-		*out_byte = 0;
-		while (iterator < byte_cap){
-			if ( encoded[count] == '1')
-				*out_byte = *out_byte + mask;			
-			mask >>=1;
-			iterator++;
-			count++;
+		byteCount = 0;
+		while(byteCount < BIG_STREAM){
+		if (encoded[count] == '\0'){
+			write(fd_out, out_byte, byteCount);
+               		free(out_byte);
+			return;}
+		iterator = 0;
+                mask = 0x80;
+                *(out_byte + byteCount) = 0;
+                while (iterator < byte_cap){
+                        if ( encoded[count] == '1')
+                        *(out_byte + byteCount) = *(out_byte + 
+					     byteCount) + mask;
+                        mask >>=1;
+                        iterator++;
+                        count++;
+                }
+		byteCount++;
 		}
-		if(write(fd_out, out_byte, 1) != 1)
-		exit(1);
-	}
-	
-	free(out_byte);
+		write(fd_out, out_byte, byteCount);
+
+        }
+        free(out_byte);
 }
-/*
-void writeBody2(char **codeArr, Node **histogram, int fd_in, int fd_out){
-	
-	long int totalChar = 0;
-	int count = 0;
-	int ret = 1;
-	char *buff = calloc(BIG_STREAM, 1);
-
-	if(buff == NULL){exit(1);}	
-
-	for (count = 0; count < SIZE; count ++){
-	if (histogram[count] -> freq != 0){
-	int prod = (histogram[count] -> freq) * strlen(codeArr);
-	totalChar = totalChar + prod;
-	}
-	}
-	
-	read(fd_in, buff, BIG_STREAM);
-
-	}
-
-
-
-
-}
-*/
-
 
 
 
@@ -454,8 +451,11 @@ int main(int argc, char *argv[]){
 	emptyFlag = malloc(sizeof(int));
 	oneFlag = malloc(sizeof(int));
 	freqArr = calloc(SIZE,  sizeof(uint32_t));
-	if(emptyFlag == NULL || freqArr == NULL || oneFlag == NULL)
-	exit(1);
+
+	alloc_check(freqArr);
+	alloc_check(oneFlag);
+ 	alloc_check(freqArr);
+
 	histogram = build_histogram(fd_in, emptyFlag, freqArr, oneFlag);
 
 
@@ -483,6 +483,8 @@ int main(int argc, char *argv[]){
 	bst = createBST(ll);
 
 	codeArr = malloc( SIZE * sizeof(char *));
+
+	alloc_check(codeArr);	
 
 	/* Initializing Array*/
 	for (count = 0; count < SIZE; count++){
