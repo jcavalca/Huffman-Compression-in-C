@@ -13,7 +13,7 @@
 
 # define SIZE 256
 # define BIG_STREAM 4096
-# define MARGIN 4
+# define SAFE 100
 void alloc_check(void *pp){
         if (pp == NULL){
                 perror("memory allocation");
@@ -277,17 +277,6 @@ void writeOutput(int fd_in, int fd_out, Node *bst, long int amountChar){
 
 }
 
-uint8_t *bufferRealloc(uint8_t *buff, int size, int new_size){
-
-	int count = 0;
-	uint8_t *new = malloc(new_size);
-	for (count = 0; count < size; count++){
-	new[count] = buff[count];}
-	free(buff);
-	return new;
-
-
-}
 void writeOutput2(int fd_in, int fd_out, Node *bst, long int amountChar){
 
         uint8_t *current;
@@ -295,10 +284,10 @@ void writeOutput2(int fd_in, int fd_out, Node *bst, long int amountChar){
         int charWritten = 0;
         Node *node = bst; /*Start at root*/
         uint8_t *buff;
-	int byteCount, cap;
-	cap = MARGIN*BIG_STREAM;
-        current = malloc(BIG_STREAM);
-        buff = malloc(cap);
+	int byteCount;
+	int capCount = 1;
+	current = malloc(BIG_STREAM);
+        buff = malloc(BIG_STREAM);
         alloc_check(current);
         alloc_check(buff);
 	
@@ -306,10 +295,9 @@ void writeOutput2(int fd_in, int fd_out, Node *bst, long int amountChar){
 		int count = 0;
 	        byteCount = 0;
 		while (count < BIG_STREAM){
-		       if (byteCount == cap){
-			int old = cap;
-			cap = MARGIN*cap;
-			buff = bufferRealloc(buff,old, cap);
+		       if (byteCount > capCount*BIG_STREAM - SAFE){
+			capCount++;
+			buff = realloc(buff, capCount * BIG_STREAM);
 			}					
 
 	               for ( mask = 0x80; mask; mask>>= 1){
@@ -341,20 +329,6 @@ void writeOutput2(int fd_in, int fd_out, Node *bst, long int amountChar){
 		}
 		write(fd_out, buff, byteCount);
         }
-
-        /*Solve files that contain chars 
- *        multiples of 8 bug
-	printf("hello %d \n", (int)(amountChar -  charWritten));
-        if (charWritten != amountChar){
-                *buff = (uint8_t) node -> Char;
-                if (write(fd_out, buff, 1) != 1){
-                perror("writing to out");
-                exit(1);
-                }
-        }*/
-        free(buff);
-        free(current);
-
 }
 
 
